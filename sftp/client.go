@@ -17,38 +17,60 @@ import (
 	"code.google.com/p/gosshnew/ssh"
 )
 
+// fxpChan is a channel on which a message recipient can wait for the message
+// to be returned.
 type fxpChan struct {
 	ReqID
 	c chan interface{}
+	l *fxpChanList
 }
 
+// waitForResponse blocks until a message is received and returns it.
 func (c *fxpChan) waitForResponse() interface{} {
 	return <-c.c
 }
 
+// close removes the channel from the channel list. The receiver of messages is
+// responsible for calling this method.
+func (c *fxpChan) close() {
+  c.l.remove(c.ReqID)
+}
+
+// fxpChanList is a list of channels that are awaiting messages.
 type fxpChanList struct {
 	sync.Mutex
 	chans []*fxpChan
 }
 
+// newChan allocates a new channel for receiving a message.
 func (l *fxpChanList) newChan() (*fxpChan, error) {
 	l.Lock()
 	defer l.Unlock()
+
+	// find the lowest unused request ID in the list. Create a new channel
+	// if an empty slot is found.
 	for i := range l.chans {
 		if l.chans[i] == nil {
-			ch := &fxpChan{ReqID: ReqID(i), c: make(chan interface{})}
+		  ch := &fxpChan{ReqID: ReqID(i), c: make(chan interface{}), l: l}
 			l.chans[i] = ch
 			return ch, nil
 		}
 	}
+
+	// The SFTP protocol defines the request identifier to be a uint32. If
+	// there are no available identifiers, return an error.
 	if len(l.chans) > 1<<32 {
 		return nil, fmt.Errorf("no available identifiers")
 	}
-	ch := &fxpChan{ReqID: ReqID(len(l.chans)), c: make(chan interface{})}
+
+	// Otherwise, allocate a new channel that has the maximal request ID so
+	// far.
+	ch := &fxpChan{ReqID: ReqID(len(l.chans)), c: make(chan interface{}), l: l}
 	l.chans = append(l.chans, ch)
 	return ch, nil
 }
 
+// dispatch routes a received message to the correct channel.
 func (l *fxpChanList) dispatch(id uint32, msg interface{}) {
 	l.Lock()
 	defer l.Unlock()
@@ -60,6 +82,7 @@ func (l *fxpChanList) dispatch(id uint32, msg interface{}) {
 	}
 }
 
+// remove removes a channel from the list.
 func (l *fxpChanList) remove(id ReqID) {
 	l.Lock()
 	defer l.Unlock()
@@ -72,6 +95,7 @@ func (l *fxpChanList) remove(id ReqID) {
 	}
 }
 
+// closeAll closes all channels.
 func (l *fxpChanList) closeAll() {
 	l.Lock()
 	defer l.Unlock()
@@ -83,6 +107,7 @@ func (l *fxpChanList) closeAll() {
 	}
 }
 
+// Client provides an SFTP client instance.
 type Client struct {
 	stdin   io.WriteCloser
 	stdout  io.Reader
@@ -91,6 +116,8 @@ type Client struct {
 	session *ssh.Session
 }
 
+// NewClient creates a new SFTP client on top of an already created
+// ssh.Session.
 func NewClient(s *ssh.Session) (*Client, error) {
 	stdin, err := s.StdinPipe()
 	if err != nil {
@@ -122,6 +149,8 @@ func NewClient(s *ssh.Session) (*Client, error) {
 	return sftp, nil
 }
 
+// init starts the SFTP protocol by negotiating the protocol version to use and
+// starts the response handler in a goroutine.
 func (s *Client) init() error {
 	msg := fxpInitMsg{
 		Version: 3,
@@ -150,6 +179,8 @@ func (s *Client) init() error {
 	return nil
 }
 
+// writePacket writes a packet repreesnted by a slice of bytes to the server,
+// in the format specified by the protocol.
 func (s *Client) writePacket(packet []byte) error {
 	length := len(packet)
 	lengthBytes := []byte{
@@ -167,13 +198,16 @@ func (s *Client) writePacket(packet []byte) error {
 	return nil
 }
 
+// readOnePacket reads a single packet sent by the server.
 func (s *Client) readOnePacket() ([]byte, error) {
+	// read the first four bytes that specify how long the packet is.
 	lengthBytes := make([]byte, 4)
 	if _, err := io.ReadFull(s.stdout, lengthBytes); err != nil {
 		return nil, err
 	}
-	// TODO(ekg): return to big endian.
 	length := binary.BigEndian.Uint32(lengthBytes[0:4])
+
+	// read more bytes for the actual packet.
 	packet := make([]byte, length)
 	if _, err := io.ReadFull(s.stdout, packet); err != nil {
 		return nil, err
@@ -181,19 +215,21 @@ func (s *Client) readOnePacket() ([]byte, error) {
 	return packet, nil
 }
 
+// mainLoop reads all of the incoming packets and dispatches them to the
+// channel corresponding to the returned request ID.
 func (s *Client) mainLoop() {
 	defer s.Close()
 	for {
 		packet, err := s.readOnePacket()
 		if err != nil {
 			if err != io.EOF {
-				fmt.Fprintf(os.Stderr, "readOnePacket %v\n", err)
+			  fmt.Fprintf(os.Stderr, "readOnePacket: %v\n", err)
 			}
 			return
 		}
 		msg, err := decodeClient(packet)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "decodeClient %v\n", err)
+		  fmt.Fprintf(os.Stderr, "decodeClient: %v\n", err)
 			return
 		}
 		switch msg := msg.(type) {
@@ -203,14 +239,18 @@ func (s *Client) mainLoop() {
 	}
 }
 
+// Close closes the SSH session and stops listening for new messages. No
+// further operations may be performed on the instance after calling Close.
 func (s *Client) Close() {
+	// session is not present in testing.
 	if s.session != nil {
 		s.session.Close()
 	}
 	s.stdin.Close()
 }
 
-// Decode a packet into its corresponding message.
+// decodeClient decodes a responsee packet's raw data into its corresponding
+// message structure.
 func decodeClient(packet []byte) (interface{}, error) {
 	var msg interface{}
 	switch packet[0] {
@@ -227,8 +267,7 @@ func decodeClient(packet []byte) (interface{}, error) {
 	case fxpPacketAttrs:
 		msg = new(fxpAttrsResp)
 	case fxpPacketExtendedReply:
-		// TODO(ekg): support this packet type.
-		return nil, UnexpectedMessageError{fxpPacketExtendedReply, packet[0]}
+		msg = new(fxpExtendedResp)
 	default:
 		return nil, UnexpectedMessageError{0, packet[0]}
 	}
@@ -238,17 +277,29 @@ func decodeClient(packet []byte) (interface{}, error) {
 	return msg, nil
 }
 
-func (s *Client) expectAttr(req ider) (*FileAttributes, error) {
+// sendRequests sends a request to the server and returns a new channel on
+// which the response will be sent.
+func (s *Client) sendRequest(req ider) (*fxpChan, error) {
 	fxpCh, err := s.chans.newChan()
 	if err != nil {
 		return nil, err
 	}
-	defer s.chans.remove(fxpCh.ReqID)
+	req.SetID(fxpCh.ID())
 
 	if err := s.writePacket(ssh.Marshal(req)); err != nil {
 		return nil, err
 	}
+	return fxpCh, nil
+}
 
+// expeectAttr sends the request and returns a FileAttributes structure that is
+// expected to result from the request.
+func (s *Client) expectAttr(req ider) (*FileAttributes, error) {
+	fxpCh, err := s.sendRequest(req)
+	if err != nil {
+	  return nil, err
+	}
+	defer fxpCh.close()
 	resp := fxpCh.waitForResponse()
 	switch msg := resp.(type) {
 	case *fxpStatusResp:
@@ -260,18 +311,14 @@ func (s *Client) expectAttr(req ider) (*FileAttributes, error) {
 	}
 }
 
+// expectStatus sends the request and returns an error if the operation
+// resulted in an error.
 func (s *Client) expectStatus(req ider) error {
-	fxpCh, err := s.chans.newChan()
+	fxpCh, err := s.sendRequest(req)
 	if err != nil {
-		return err
+	  return err
 	}
-	defer s.chans.remove(fxpCh.ReqID)
-	req.SetID(fxpCh.ID())
-
-	if err := s.writePacket(ssh.Marshal(req)); err != nil {
-		return err
-	}
-
+	defer fxpCh.close()
 	resp := fxpCh.waitForResponse()
 	switch msg := resp.(type) {
 	case *fxpStatusResp:
@@ -284,17 +331,14 @@ func (s *Client) expectStatus(req ider) error {
 	}
 }
 
+// expectHandle sends the request and returns the resulting file or directory
+// handle that is expected to be returned.
 func (s *Client) expectHandle(req ider) (string, error) {
-	fxpCh, err := s.chans.newChan()
+	fxpCh, err := s.sendRequest(req)
 	if err != nil {
-		return "", err
+	  return "", err
 	}
-	defer s.chans.remove(fxpCh.ReqID)
-	req.SetID(fxpCh.ID())
-
-	if err := s.writePacket(ssh.Marshal(req)); err != nil {
-		return "", err
-	}
+	defer fxpCh.close()
 
 	resp := fxpCh.waitForResponse()
 	switch msg := resp.(type) {
@@ -307,18 +351,14 @@ func (s *Client) expectHandle(req ider) (string, error) {
 	}
 }
 
+// expectName sends the request and returns the file name data that is expected
+// to be returned.
 func (s *Client) expectName(req ider) ([]fxpNameData, error) {
-	fxpCh, err := s.chans.newChan()
+	fxpCh, err := s.sendRequest(req)
 	if err != nil {
-		return nil, err
+	  return nil, err
 	}
-	defer s.chans.remove(fxpCh.ReqID)
-	req.SetID(fxpCh.ID())
-
-	if err := s.writePacket(ssh.Marshal(req)); err != nil {
-		return nil, err
-	}
-
+	defer fxpCh.close()
 	resp := fxpCh.waitForResponse()
 	switch msg := resp.(type) {
 	case *fxpStatusResp:
@@ -330,6 +370,8 @@ func (s *Client) expectName(req ider) ([]fxpNameData, error) {
 	}
 }
 
+// expectOneName sends the request and returns the single name that is expected
+// to be returned.
 func (s *Client) expectOneName(msg ider) (string, error) {
 	n, err := s.expectName(msg)
 	if err != nil {
@@ -344,6 +386,7 @@ func (s *Client) expectOneName(msg ider) (string, error) {
 	return n[0].Filename, nil
 }
 
+// Stat returns file attributes for the given path.
 func (s *Client) Stat(path string) (os.FileInfo, error) {
 	fi, err := s.expectAttr(fxpStatMsg{Path: path})
 	if err != nil {
@@ -353,28 +396,47 @@ func (s *Client) Stat(path string) (os.FileInfo, error) {
 	return fi, nil
 }
 
+// LStat returns file attributes for the given path.
+func (s *Client) LStat(path string) (os.FileInfo, error) {
+	fi, err := s.expectAttr(fxpLStatMsg{Path: path})
+	if err != nil {
+		return nil, err
+	}
+	fi.name = path
+	return fi, nil
+}
+
+// Remove deletes the named file.
 func (s *Client) Remove(name string) error {
 	return s.expectStatus(fxpRemoveMsg{Filename: name})
 }
 
+// Mkdir creates a directory at the specified absolute path with the specified
+// permissions.
 func (s *Client) Mkdir(name string, perm os.FileMode) error {
 	req := fxpMkdirMsg{Path: name}
 	req.Attrs.setPermission(uint32(perm & os.ModePerm))
 	return s.expectStatus(req)
 }
 
+// Rmdir deletes the named directory.
 func (s *Client) Rmdir(name string) error {
 	return s.expectStatus(fxpRmdirMsg{Path: name})
 }
 
-func (s *Client) ReadDir(name string) ([]os.FileInfo, error) {
+// ReadDir returns a list of file information for files in a specific
+// directory.
+func (s *Client) readDir(name string) ([]os.FileInfo, error) {
 	h, err := s.expectHandle(fxpOpenDirMsg{Path: name})
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		s.expectStatus(fxpCloseMsg{Handle: h})
-	}()
+	// close the handle regardless of whether an error is encountered.
+	defer s.expectStatus(fxpCloseMsg{Handle: h})
+
+	// TODO(ekg): the unmarshaling doesn't support slices of structs. Fix
+	// this and change the visibility of this method.
+	return nil, nil
 
 	fi := []os.FileInfo{}
 	for {
@@ -463,8 +525,15 @@ func (s *Client) Readlink(name string) (string, error) {
 	return s.expectOneName(fxpReadLinkMsg{Path: name})
 }
 
+// Symlink creates a symbolic link at the path newname pointing to the path
+// oldname.
 func (s *Client) Symlink(oldname, newname string) error {
-	return s.expectStatus(fxpSymlinkMsg{LinkPath: newname, TargetPath: oldname})
+	// Note that the paths are reversed in this implementation when
+	// compared against the specification. This is because OpenSSH
+	// "inadvertently" implemented this request incorrectly and decided to
+	// just go with it. See the PROTOCOL file in OpenSSH for more
+	// information.
+	return s.expectStatus(fxpSymlinkMsg{LinkPath: oldname, TargetPath: newname})
 }
 
 func (s *Client) Realpath(path string) (string, error) {

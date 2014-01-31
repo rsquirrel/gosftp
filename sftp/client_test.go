@@ -7,7 +7,6 @@
 package sftp
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -45,60 +44,6 @@ func newTestSFTP(t *testing.T) *testSFTP {
 	return &sftp
 }
 
-/*
-type harness struct {
-  client *ssh.ClientConn
-  session *ssh.Session
-  sftp *SFTP
-}
-
-func (h *harness) close() {
-  h.session.Close()
-  h.client.Close()
-}
-
-type password string
-
-func (p password) Password(user string) (string, error) {
-	return string(p), nil
-}
-
-
-func newHarness(t *testing.T) *harness {
-  filename := "none"
-  f, err := ioutil.ReadFile(filename)
-  if err != nil {
-    t.Fatalf("ioutil.Readfile(%q) = _, %v, want nil", filename, err)
-    panic(err)
-  }
-  config := &ssh.ClientConfig{
-    User: "ekg",
-    Auth: []ssh.ClientAuth{
-      ssh.ClientAuthPassword(password(strings.TrimSpace(string(f)))),
-    },
-  }
-  client, err := ssh.Dial("tcp", "127.0.0.1:8080", config)
-  if err != nil {
-    t.Fatal("ssh.Dial('tcp', '127,0,0,1:8080', %q) = _, %v want nil", config, err)
-  }
-
-  session, err := client.NewSession()
-  if err != nil {
-    t.Fatal("client.NewSession() = _, %v want nil", err)
-  }
-
-  s, err := NewSFTP(session)
-  if err != nil {
-    t.Fatal("NewSFTP(_) = _, %v want nil", err)
-  }
-  return &harness{
-    client: client,
-    session: session,
-    sftp: s,
-  }
-}
-*/
-
 func TestAll(t *testing.T) {
 	// Unset umask to ensure mode bits are set correctly. This is
 	// non-portable.
@@ -119,8 +64,9 @@ func TestAll(t *testing.T) {
 	testChown(t, s.Client, file)
 	testRename(t, s.Client, file)
 	testReadDir(t, s.Client, dir)
+	testSymlink(t, s.Client, file)
 	testRemove(t, s.Client, file)
-	// testRmdir(t, s.Client, dir)
+	testRmdir(t, s.Client, dir)
 
 	s.Close()
 	s.cmd.Process.Kill()
@@ -315,9 +261,32 @@ func testRmdir(t *testing.T, s *Client, path string) {
 }
 
 func testReadDir(t *testing.T, s *Client, path string) {
-	fi, err := s.ReadDir(path)
+	_, err := s.readDir(path)
 	if err != nil {
 		t.Errorf("s.ReadDir(%q) = _, %v, want nil", path, err)
 	}
-	fmt.Fprintf(os.Stderr, "%+v", fi)
+	// TODO(ekg): implement a test on the return value when the
+	// implementation is complete.
+}
+
+func testSymlink(t *testing.T, s *Client, path string) {
+  linkPath := path+".link"
+  if err := s.Symlink(path, linkPath); err != nil {
+    t.Errorf("s.Symlink(%q, %q) = %v, want nil", path, linkPath, err)
+    return
+  }
+  linkFi, err := s.LStat(linkPath)
+  if err != nil {
+    t.Errorf("s.LStat(%q) = _, %v, want nil", linkPath, err)
+  }
+  pathFi, err := s.Stat(path)
+  if err != nil {
+    t.Errorf("s.Stat(%q) = _, %v, want nil", path, err)
+  }
+  if os.SameFile(linkFi, pathFi) {
+    t.Errorf("os.SameFile(%q, %q) = true, want false", linkPath, path)
+  }
+  if err := s.Remove(linkPath); err != nil {
+    t.Errorf("s.Remove(%q) = %v want nil", linkPath)
+  }
 }

@@ -10,8 +10,9 @@ import (
 	"fmt"
 )
 
+// SSH file transer protocol request packet types, defined in section 3,
+// "General Packet Format".
 const (
-	// These are SSH file transer protocol (Client) packet types, as defined in section 3...  const (
 	fxpPacketInit = iota + 1
 	fxpPacketVersion
 	fxpPacketOpen
@@ -34,21 +35,33 @@ const (
 	fxpPacketSymLink
 )
 
+// SSH file transer protocol response packet types, defined in section 3,
+// "General Packet Format".
 const (
 	fxpPacketStatus = iota + 101
 	fxpPacketHandle
 	fxpPacketData
 	fxpPacketName
 	fxpPacketAttrs
-	fxpPacketExtended
-	fxpPacketExtendedReply
 )
 
+// SSH file transfer protocol message types to support vendor-specific
+// extentions.
+const (
+	fxpPacketExtended = 200
+	fxpPacketExtendedReply = 201
+)
+
+// ider specifies functions for a struct to contain an identifier.
 type ider interface {
+        // ID returns the identifier of the instance.
 	ID() uint32
+	// SetID sets the identifier of the instance.
 	SetID(uint32)
 }
 
+// ReqID is a request ID used in all requests. It has external visibility for
+// unmarshalling purposes.
 type ReqID uint32
 
 func (f ReqID) ID() uint32 {
@@ -56,13 +69,26 @@ func (f ReqID) ID() uint32 {
 }
 func (f ReqID) SetID(id uint32) { f = ReqID(id) }
 
+// fxpInitMsg is the first message sent from client to server in the SFTP
+// protocol.
 type fxpInitMsg struct {
+	// Version specifies the highest version number of the protocol
+	// implemented.
 	Version uint32 `sshtype:"1"`
 }
 
+// fxpVersionMsg is the response to an fxpInitMsg.
 type fxpVersionMsg struct {
+	// Version contains the lowest of the server's and client's implemented
+	// version.
 	Version uint32 `sshtype:"2"`
+	// Data may contain a list of strings representing optional extensions.
+	// No extensions are presently supported.
 	Data    []byte `ssh:"rest"`
+}
+
+// stringList parses a series of string fields from a byte buffer.
+func stringList(buf []byte) []string {
 }
 
 type fxpOpenMsg struct {
@@ -128,6 +154,11 @@ type fxpStatMsg struct {
 	Path  string
 }
 
+type fxpLStatMsg struct {
+	ReqID `sshtype:"7"`
+	Path  string
+}
+
 type fxpFStatMsg struct {
 	ReqID  `sshtype:"8"`
 	Handle string
@@ -161,10 +192,21 @@ type fxpSymlinkMsg struct {
 	TargetPath string
 }
 
-//////////////////////////////
+// fxpExtendedMsg is the request type for vendor-specific extensions
+// implemented by the server.
+type fxpExtendedMsg struct {
+  ReqID `sshtype:"200"`
+  // Extension is the extension name, in the form "name@domain".
+  Extension string
+  // Data is the payload for the extension, which may be empty.
+  Data []byte
+}
 
+// Status is a error number defined by section 7, "Responses from the Server to
+// the Client".
 type Status uint32
 
+// The list of error codes defined by the protocol.
 const (
 	ok Status = iota
 	eof
@@ -220,8 +262,8 @@ type fxpExtendedResp struct {
 	Data  []byte `ssh:"rest"`
 }
 
-// UnexpectedMessageError results when the SSH message that we received didn't
-// match what we wanted.
+// UnexpectedMessageError results when the SSH message that was received did
+// not match what the protocol specifies as the proper returned message type.
 type UnexpectedMessageError struct {
 	expected, got uint8
 }
