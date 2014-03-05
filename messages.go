@@ -89,6 +89,7 @@ type fxpVersionMsg struct {
 
 // stringList parses a series of string fields from a byte buffer.
 func stringList(buf []byte) []string {
+  return nil
 }
 
 type fxpOpenMsg struct {
