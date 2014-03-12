@@ -1,5 +1,5 @@
 // Copyright 2014 Google Inc. All rights reserved.
-// 
+//
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file or at
 // https://developers.google.com/open-source/licenses/bsd
@@ -25,7 +25,7 @@ func newTestSFTP(t *testing.T) *testSFTP {
 		Client: &Client{
 			chans: &fxpChanList{},
 		},
-		cmd: exec.Command("/usr/lib/openssh/sftp-server", "-e", "-l", "DEBUG3"),
+		cmd: exec.Command("/usr/lib/openssh/sftp-server", "-u", "0", "-e", "-l", "DEBUG3"),
 	}
 	var err error
 	if sftp.stdin, err = sftp.cmd.StdinPipe(); err != nil {
@@ -45,10 +45,6 @@ func newTestSFTP(t *testing.T) *testSFTP {
 }
 
 func TestAll(t *testing.T) {
-	// Unset umask to ensure mode bits are set correctly. This is
-	// non-portable.
-	syscall.Umask(0)
-
 	s := newTestSFTP(t)
 
 	tmpDir, err := ioutil.TempDir("", "sftptest")
@@ -236,7 +232,7 @@ func testRemove(t *testing.T, s *Client, path string) {
 
 func testMkdir(t *testing.T, s *Client, path string) {
 	if err := s.Mkdir(path, 0775); err != nil {
-		t.Fatalf("s.Mkdir(%q) = %v, want nil", path, err)
+		t.Fatalf("s.Mkdir(%qi, 0755) = %v, want nil", path, err)
 	}
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -246,7 +242,7 @@ func testMkdir(t *testing.T, s *Client, path string) {
 		t.Fatalf("fi.IsDir() = false, want true")
 	}
 	if fi.Mode()&os.ModePerm != os.FileMode(0775) {
-		t.Errorf("fi.Mode() = %d, want %d", fi.Mode()&os.ModePerm, os.FileMode(0775))
+		t.Errorf("fi.Mode() = %o, want %o", fi.Mode()&os.ModePerm, os.FileMode(0775))
 	}
 }
 
@@ -270,23 +266,23 @@ func testReadDir(t *testing.T, s *Client, path string) {
 }
 
 func testSymlink(t *testing.T, s *Client, path string) {
-  linkPath := path+".link"
-  if err := s.Symlink(path, linkPath); err != nil {
-    t.Errorf("s.Symlink(%q, %q) = %v, want nil", path, linkPath, err)
-    return
-  }
-  linkFi, err := s.LStat(linkPath)
-  if err != nil {
-    t.Errorf("s.LStat(%q) = _, %v, want nil", linkPath, err)
-  }
-  pathFi, err := s.Stat(path)
-  if err != nil {
-    t.Errorf("s.Stat(%q) = _, %v, want nil", path, err)
-  }
-  if os.SameFile(linkFi, pathFi) {
-    t.Errorf("os.SameFile(%q, %q) = true, want false", linkPath, path)
-  }
-  if err := s.Remove(linkPath); err != nil {
-    t.Errorf("s.Remove(%q) = %v want nil", linkPath)
-  }
+	linkPath := path + ".link"
+	if err := s.Symlink(path, linkPath); err != nil {
+		t.Errorf("s.Symlink(%q, %q) = %v, want nil", path, linkPath, err)
+		return
+	}
+	linkFi, err := s.LStat(linkPath)
+	if err != nil {
+		t.Errorf("s.LStat(%q) = _, %v, want nil", linkPath, err)
+	}
+	pathFi, err := s.Stat(path)
+	if err != nil {
+		t.Errorf("s.Stat(%q) = _, %v, want nil", path, err)
+	}
+	if os.SameFile(linkFi, pathFi) {
+		t.Errorf("os.SameFile(%q, %q) = true, want false", linkPath, path)
+	}
+	if err := s.Remove(linkPath); err != nil {
+		t.Errorf("s.Remove(%q) = %v want nil", linkPath)
+	}
 }

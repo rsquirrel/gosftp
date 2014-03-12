@@ -1,5 +1,5 @@
 // Copyright 2014 Google Inc. All rights reserved.
-// 
+//
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file or at
 // https://developers.google.com/open-source/licenses/bsd
@@ -48,13 +48,13 @@ const (
 // SSH file transfer protocol message types to support vendor-specific
 // extentions.
 const (
-	fxpPacketExtended = 200
+	fxpPacketExtended      = 200
 	fxpPacketExtendedReply = 201
 )
 
 // ider specifies functions for a struct to contain an identifier.
 type ider interface {
-        // ID returns the identifier of the instance.
+	// ID returns the identifier of the instance.
 	ID() uint32
 	// SetID sets the identifier of the instance.
 	SetID(uint32)
@@ -84,19 +84,19 @@ type fxpVersionMsg struct {
 	Version uint32 `sshtype:"2"`
 	// Data may contain a list of strings representing optional extensions.
 	// No extensions are presently supported.
-	Data    []byte `ssh:"rest"`
+	Data []byte `ssh:"rest"`
 }
 
 // stringList parses a series of string fields from a byte buffer.
 func stringList(buf []byte) []string {
-  return nil
+	return nil
 }
 
 type fxpOpenMsg struct {
 	ReqID    `sshtype:"3"`
 	Filename string
 	Pflags   uint32
-	Attrs    FileAttributes
+	AttrData []byte `ssh:"rest"`
 }
 
 type fxpCloseMsg struct {
@@ -130,9 +130,9 @@ type fxpRenameMsg struct {
 }
 
 type fxpMkdirMsg struct {
-	ReqID `sshtype:"14"`
-	Path  string
-	Attrs FileAttributes
+	ReqID    `sshtype:"14"`
+	Path     string
+	AttrData []byte `ssh:"rest"`
 }
 
 type fxpRmdirMsg struct {
@@ -166,15 +166,15 @@ type fxpFStatMsg struct {
 }
 
 type fxpSetStatMsg struct {
-	ReqID `sshtype:"9"`
-	Path  string
-	Attrs FileAttributes
+	ReqID    `sshtype:"9"`
+	Path     string
+	AttrData []byte `ssh:"rest"`
 }
 
 type fxpFSetStatMsg struct {
-	ReqID  `sshtype:"10"`
-	Handle string
-	Attrs  FileAttributes
+	ReqID    `sshtype:"10"`
+	Handle   string
+	AttrData []byte `ssh:"rest"`
 }
 
 type fxpReadLinkMsg struct {
@@ -196,11 +196,11 @@ type fxpSymlinkMsg struct {
 // fxpExtendedMsg is the request type for vendor-specific extensions
 // implemented by the server.
 type fxpExtendedMsg struct {
-  ReqID `sshtype:"200"`
-  // Extension is the extension name, in the form "name@domain".
-  Extension string
-  // Data is the payload for the extension, which may be empty.
-  Data []byte
+	ReqID `sshtype:"200"`
+	// Extension is the extension name, in the form "name@domain".
+	Extension string
+	// Data is the payload for the extension, which may be empty.
+	Data []byte
 }
 
 // Status is a error number defined by section 7, "Responses from the Server to
@@ -245,7 +245,7 @@ type fxpNameData struct {
 	ReqID
 	Filename string
 	Longname string
-	Attrs    FileAttributes
+	AttrData []byte `ssh:"rest"`
 }
 
 type fxpNameResp struct {
@@ -254,8 +254,8 @@ type fxpNameResp struct {
 }
 
 type fxpAttrsResp struct {
-	ReqID `sshtype:"105"`
-	Attrs FileAttributes
+	ReqID    `sshtype:"105"`
+	AttrData []byte `ssh:"rest"`
 }
 
 type fxpExtendedResp struct {

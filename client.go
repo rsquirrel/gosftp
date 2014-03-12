@@ -1,5 +1,5 @@
 // Copyright 2014 Google Inc. All rights reserved.
-// 
+//
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file or at
 // https://developers.google.com/open-source/licenses/bsd
@@ -33,7 +33,7 @@ func (c *fxpChan) waitForResponse() interface{} {
 // close removes the channel from the channel list. The receiver of messages is
 // responsible for calling this method.
 func (c *fxpChan) close() {
-  c.l.remove(c.ReqID)
+	c.l.remove(c.ReqID)
 }
 
 // fxpChanList is a list of channels that are awaiting messages.
@@ -51,7 +51,7 @@ func (l *fxpChanList) newChan() (*fxpChan, error) {
 	// if an empty slot is found.
 	for i := range l.chans {
 		if l.chans[i] == nil {
-		  ch := &fxpChan{ReqID: ReqID(i), c: make(chan interface{}), l: l}
+			ch := &fxpChan{ReqID: ReqID(i), c: make(chan interface{}), l: l}
 			l.chans[i] = ch
 			return ch, nil
 		}
@@ -223,13 +223,13 @@ func (s *Client) mainLoop() {
 		packet, err := s.readOnePacket()
 		if err != nil {
 			if err != io.EOF {
-			  fmt.Fprintf(os.Stderr, "readOnePacket: %v\n", err)
+				fmt.Fprintf(os.Stderr, "readOnePacket: %v\n", err)
 			}
 			return
 		}
 		msg, err := decodeClient(packet)
 		if err != nil {
-		  fmt.Fprintf(os.Stderr, "decodeClient: %v\n", err)
+			fmt.Fprintf(os.Stderr, "decodeClient: %v\n", err)
 			return
 		}
 		switch msg := msg.(type) {
@@ -297,7 +297,7 @@ func (s *Client) sendRequest(req ider) (*fxpChan, error) {
 func (s *Client) expectAttr(req ider) (*FileAttributes, error) {
 	fxpCh, err := s.sendRequest(req)
 	if err != nil {
-	  return nil, err
+		return nil, err
 	}
 	defer fxpCh.close()
 	resp := fxpCh.waitForResponse()
@@ -305,7 +305,7 @@ func (s *Client) expectAttr(req ider) (*FileAttributes, error) {
 	case *fxpStatusResp:
 		return nil, msg
 	case *fxpAttrsResp:
-		return &msg.Attrs, nil
+		return NewFileAttributes(msg.AttrData), nil
 	default:
 		panic("unexpected message type returned from server")
 	}
@@ -316,7 +316,7 @@ func (s *Client) expectAttr(req ider) (*FileAttributes, error) {
 func (s *Client) expectStatus(req ider) error {
 	fxpCh, err := s.sendRequest(req)
 	if err != nil {
-	  return err
+		return err
 	}
 	defer fxpCh.close()
 	resp := fxpCh.waitForResponse()
@@ -336,7 +336,7 @@ func (s *Client) expectStatus(req ider) error {
 func (s *Client) expectHandle(req ider) (string, error) {
 	fxpCh, err := s.sendRequest(req)
 	if err != nil {
-	  return "", err
+		return "", err
 	}
 	defer fxpCh.close()
 
@@ -356,7 +356,7 @@ func (s *Client) expectHandle(req ider) (string, error) {
 func (s *Client) expectName(req ider) ([]fxpNameData, error) {
 	fxpCh, err := s.sendRequest(req)
 	if err != nil {
-	  return nil, err
+		return nil, err
 	}
 	defer fxpCh.close()
 	resp := fxpCh.waitForResponse()
@@ -414,8 +414,9 @@ func (s *Client) Remove(name string) error {
 // Mkdir creates a directory at the specified absolute path with the specified
 // permissions.
 func (s *Client) Mkdir(name string, perm os.FileMode) error {
-	req := fxpMkdirMsg{Path: name}
-	req.Attrs.setPermission(uint32(perm & os.ModePerm))
+	attrs := FileAttributes{}
+	attrs.setPermission(uint32(perm & os.ModePerm))
+	req := fxpMkdirMsg{Path: name, AttrData: attrs.bytes()}
 	return s.expectStatus(req)
 }
 
@@ -448,8 +449,9 @@ func (s *Client) readDir(name string) ([]os.FileInfo, error) {
 			return nil, err
 		}
 		for _, data := range names {
-			data.Attrs.name = data.Filename
-			fi = append(fi, data.Attrs)
+			a := NewFileAttributes(data.AttrData)
+			a.name = data.Filename
+			fi = append(fi, a)
 		}
 	}
 	return fi, nil
@@ -496,9 +498,11 @@ func (s *Client) OpenFile(name string, flags int, attrs os.FileMode) (*File, err
 		Filename: name,
 		Pflags:   convertFlags(flags),
 	}
+	a := FileAttributes{}
 	if attrs != 0 {
-		req.Attrs.setPermission(uint32(attrs & os.ModePerm))
+		a.setPermission(uint32(attrs & os.ModePerm))
 	}
+	req.AttrData = a.bytes()
 	h, err := s.expectHandle(req)
 	if err != nil {
 		return nil, err
@@ -517,8 +521,9 @@ func (s *Client) Open(name string) (*File, error) {
 }
 
 func (s *Client) Chown(path string, uid, gid int) error {
-	req := fxpSetStatMsg{Path: path}
-	req.Attrs.setID(uint32(uid), uint32(gid))
+	a := FileAttributes{}
+	a.setID(uint32(uid), uint32(gid))
+	req := fxpSetStatMsg{Path: path, AttrData: a.bytes()}
 	return s.expectStatus(req)
 }
 func (s *Client) Readlink(name string) (string, error) {
@@ -676,8 +681,9 @@ func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 
 // TODO(ekg): handle other methods
 func (f *File) Chown(uid, gid int) error {
-	req := fxpFSetStatMsg{Handle: f.handle}
-	req.Attrs.setID(uint32(uid), uint32(gid))
+	a := FileAttributes{}
+	a.setID(uint32(uid), uint32(gid))
+	req := fxpFSetStatMsg{Handle: f.handle, AttrData: a.bytes()}
 	return f.sftp.expectStatus(req)
 }
 
