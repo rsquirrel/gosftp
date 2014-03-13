@@ -7,7 +7,6 @@
 package sftp
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
