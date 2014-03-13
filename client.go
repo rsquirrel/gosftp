@@ -21,9 +21,9 @@ import (
 // fxpChan is a channel on which a message recipient can wait for the message
 // to be returned.
 type fxpChan struct {
-	ReqID
-	c chan interface{}
-	l *fxpChanList
+	id uint32
+	c  chan interface{}
+	l  *fxpChanList
 }
 
 // waitForResponse blocks until a message is received and returns it.
@@ -34,7 +34,7 @@ func (c *fxpChan) waitForResponse() interface{} {
 // close removes the channel from the channel list. The receiver of messages is
 // responsible for calling this method.
 func (c *fxpChan) close() {
-	c.l.remove(c.ReqID)
+	c.l.remove(c.id)
 }
 
 // fxpChanList is a list of channels that are awaiting messages.
@@ -52,7 +52,7 @@ func (l *fxpChanList) newChan() (*fxpChan, error) {
 	// if an empty slot is found.
 	for i := range l.chans {
 		if l.chans[i] == nil {
-			ch := &fxpChan{ReqID: ReqID(i), c: make(chan interface{}), l: l}
+			ch := &fxpChan{id: uint32(i), c: make(chan interface{}), l: l}
 			l.chans[i] = ch
 			return ch, nil
 		}
@@ -66,7 +66,7 @@ func (l *fxpChanList) newChan() (*fxpChan, error) {
 
 	// Otherwise, allocate a new channel that has the maximal request ID so
 	// far.
-	ch := &fxpChan{ReqID: ReqID(len(l.chans)), c: make(chan interface{}), l: l}
+	ch := &fxpChan{id: uint32(len(l.chans)), c: make(chan interface{}), l: l}
 	l.chans = append(l.chans, ch)
 	return ch, nil
 }
@@ -84,7 +84,7 @@ func (l *fxpChanList) dispatch(id uint32, msg interface{}) {
 }
 
 // remove removes a channel from the list.
-func (l *fxpChanList) remove(id ReqID) {
+func (l *fxpChanList) remove(id uint32) {
 	l.Lock()
 	defer l.Unlock()
 	if int(id) >= len(l.chans) {
@@ -107,6 +107,14 @@ func (l *fxpChanList) closeAll() {
 		close(ch.c)
 	}
 }
+
+// Extensions supported by the OpenSSH sftp implementation.
+const (
+	posixRename = "posix-rename@openssh.com"
+	statVFS     = "statvfs@openssh.com"
+	fStatVFS    = "fstatvfs@openssh.com"
+	hardlink    = "hardlink@openssh.com"
+)
 
 type extension struct {
 	Name    string
@@ -264,7 +272,7 @@ func (s *Client) mainLoop() {
 		}
 		switch msg := msg.(type) {
 		case *fxpVersionMsg, *fxpStatusResp, *fxpHandleResp, *fxpDataResp, *fxpNameResp, *fxpAttrsResp:
-			s.chans.dispatch(msg.(ider).ID(), msg)
+			s.chans.dispatch(msg.(ider).GetID(), msg)
 		}
 	}
 }
@@ -314,8 +322,7 @@ func (s *Client) sendRequest(req ider) (*fxpChan, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.SetID(fxpCh.ID())
-
+	req.SetID(fxpCh.id)
 	if err := s.writePacket(ssh.Marshal(req)); err != nil {
 		return nil, err
 	}
@@ -429,7 +436,7 @@ func (s *Client) expectOneName(msg ider) (string, error) {
 
 // Stat returns file attributes for the given path.
 func (s *Client) Stat(path string) (os.FileInfo, error) {
-	fi, err := s.expectAttr(fxpStatMsg{Path: path})
+	fi, err := s.expectAttr(&fxpStatMsg{Path: path})
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +446,7 @@ func (s *Client) Stat(path string) (os.FileInfo, error) {
 
 // LStat returns file attributes for the given path.
 func (s *Client) LStat(path string) (os.FileInfo, error) {
-	fi, err := s.expectAttr(fxpLStatMsg{Path: path})
+	fi, err := s.expectAttr(&fxpLStatMsg{Path: path})
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +456,7 @@ func (s *Client) LStat(path string) (os.FileInfo, error) {
 
 // Remove deletes the named file.
 func (s *Client) Remove(name string) error {
-	return s.expectStatus(fxpRemoveMsg{Filename: name})
+	return s.expectStatus(&fxpRemoveMsg{Filename: name})
 }
 
 // Mkdir creates a directory at the specified absolute path with the specified
@@ -458,25 +465,25 @@ func (s *Client) Mkdir(name string, perm os.FileMode) error {
 	attrs := FileAttributes{}
 	attrs.setPermission(uint32(perm & os.ModePerm))
 	req := fxpMkdirMsg{Path: name, AttrData: attrs.bytes()}
-	return s.expectStatus(req)
+	return s.expectStatus(&req)
 }
 
 // Rmdir deletes the named directory.
 func (s *Client) Rmdir(name string) error {
-	return s.expectStatus(fxpRmdirMsg{Path: name})
+	return s.expectStatus(&fxpRmdirMsg{Path: name})
 }
 
 // ReadDir returns a list of file information for files in a specific
 // directory.
 func (s *Client) ReadDir(name string) ([]os.FileInfo, error) {
-	h, err := s.expectHandle(fxpOpenDirMsg{Path: name})
+	h, err := s.expectHandle(&fxpOpenDirMsg{Path: name})
 	if err != nil {
 		return nil, err
 	}
 
 	fi := []os.FileInfo{}
 	for {
-		names, err := s.expectName(fxpReadDirMsg{Handle: h})
+		names, err := s.expectName(&fxpReadDirMsg{Handle: h})
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -538,7 +545,7 @@ func (s *Client) OpenFile(name string, flags int, attrs os.FileMode) (*File, err
 		a.setPermission(uint32(attrs & os.ModePerm))
 	}
 	req.AttrData = a.bytes()
-	h, err := s.expectHandle(req)
+	h, err := s.expectHandle(&req)
 	if err != nil {
 		return nil, err
 	}
@@ -558,11 +565,10 @@ func (s *Client) Open(name string) (*File, error) {
 func (s *Client) Chown(path string, uid, gid int) error {
 	a := FileAttributes{}
 	a.setID(uint32(uid), uint32(gid))
-	req := fxpSetStatMsg{Path: path, AttrData: a.bytes()}
-	return s.expectStatus(req)
+	return s.expectStatus(&fxpSetStatMsg{Path: path, AttrData: a.bytes()})
 }
 func (s *Client) Readlink(name string) (string, error) {
-	return s.expectOneName(fxpReadLinkMsg{Path: name})
+	return s.expectOneName(&fxpReadLinkMsg{Path: name})
 }
 
 // Symlink creates a symbolic link at the path newname pointing to the path
@@ -576,15 +582,32 @@ func (s *Client) Symlink(oldname, newname string) error {
 	// TODO(ekg): make this optional so as to support non-OpenSSH SFTP
 	// implementations, if necessary. It may be that other implementations
 	// do the same.
-	return s.expectStatus(fxpSymlinkMsg{LinkPath: oldname, TargetPath: newname})
+	return s.expectStatus(&fxpSymlinkMsg{LinkPath: oldname, TargetPath: newname})
 }
 
 func (s *Client) Realpath(path string) (string, error) {
-	return s.expectOneName(fxpRealPathMsg{Path: path})
+	return s.expectOneName(&fxpRealPathMsg{Path: path})
 }
 
 func (s *Client) Rename(oldname, newname string) error {
-	return s.expectStatus(fxpRenameMsg{NewPath: newname, OldPath: oldname})
+	// TODO(ekg): should we use PosixRename if it is available?
+	// TODO(ekg): do range checking on all incoming strings. they must be less than 256*2014 char
+	return s.expectStatus(&fxpRenameMsg{NewPath: newname, OldPath: oldname})
+}
+
+func (s *Client) PosixRename(oldname, newname string) error {
+	if e, ok := s.exts[posixRename]; !ok {
+		if e.version != 1 {
+			return fmt.Errorf("server does not support posix rename version 1")
+		}
+		return fmt.Errorf("server does not support posix rename")
+	}
+	msg := posixRenameMsg{
+		Extension: posixRename,
+		OldPath:   oldname,
+		NewPath:   newname,
+	}
+	return s.expectStatus(&msg)
 }
 
 type File struct {
@@ -600,7 +623,7 @@ func (f *File) String() string {
 }
 
 func (f *File) Close() error {
-	return f.sftp.expectStatus(fxpCloseMsg{Handle: f.handle})
+	return f.sftp.expectStatus(&fxpCloseMsg{Handle: f.handle})
 }
 
 const maxDataBytes = 1 << 15
@@ -624,8 +647,8 @@ func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 	if err != nil {
 		return
 	}
-	defer f.sftp.chans.remove(fxpCh.ReqID)
-	req.SetID(fxpCh.ID())
+	defer f.sftp.chans.remove(fxpCh.id)
+	req.SetID(fxpCh.id)
 
 	for len(b) > 0 {
 		req.Offset = uint64(n) + uint64(off)
@@ -653,7 +676,7 @@ func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 }
 
 func (f *File) Stat() (os.FileInfo, error) {
-	fi, err := f.sftp.expectAttr(fxpFStatMsg{Handle: f.handle})
+	fi, err := f.sftp.expectAttr(&fxpFStatMsg{Handle: f.handle})
 	if err != nil {
 		return nil, err
 	}
@@ -673,8 +696,8 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 	if err != nil {
 		return
 	}
-	defer f.sftp.chans.remove(fxpCh.ReqID)
-	req.SetID(fxpCh.ID())
+	defer f.sftp.chans.remove(fxpCh.id)
+	req.SetID(fxpCh.id)
 
 	for len(b) > 0 {
 		req.Offset = uint64(n) + uint64(off)
@@ -721,7 +744,7 @@ func (f *File) Chown(uid, gid int) error {
 	a := FileAttributes{}
 	a.setID(uint32(uid), uint32(gid))
 	req := fxpFSetStatMsg{Handle: f.handle, AttrData: a.bytes()}
-	return f.sftp.expectStatus(req)
+	return f.sftp.expectStatus(&req)
 }
 
 func (f *File) Name() string {

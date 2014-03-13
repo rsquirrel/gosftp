@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"syscall"
 	"testing"
 )
@@ -26,7 +25,9 @@ func newTestSFTP(t *testing.T) *testSFTP {
 		Client: &Client{
 			chans: &fxpChanList{},
 		},
-		cmd: exec.Command("/usr/lib/openssh/sftp-server", "-u", "0", "-e", "-l", "DEBUG3"),
+		// cmd: exec.Command("/usr/lib/openssh/sftp-server", "-u", "0", "-e", "-l", "DEBUG3"),
+		// TODO(ekg): make the path to the binary a flag.
+		cmd: exec.Command("/home/ekg/Downloads/openssh-6.5p1/sftp-server", "-u", "0", "-e", "-l", "DEBUG3"),
 	}
 	var err error
 	if sftp.stdin, err = sftp.cmd.StdinPipe(); err != nil {
@@ -47,7 +48,6 @@ func newTestSFTP(t *testing.T) *testSFTP {
 
 func TestAll(t *testing.T) {
 	s := newTestSFTP(t)
-	testExtensions(t, s.Client)
 
 	tmpDir, err := ioutil.TempDir("", "sftptest")
 	if err != nil {
@@ -61,42 +61,16 @@ func TestAll(t *testing.T) {
 	testStat(t, s.Client, file)
 	testChown(t, s.Client, file)
 	testRename(t, s.Client, file)
+	testPosixRename(t, s.Client, file)
 	testReaddir(t, s.Client, dir)
 	testSymlink(t, s.Client, file)
 	testRemove(t, s.Client, file)
 	testRmdir(t, s.Client, dir)
+	// TODO(ekg): test that the chanList is in the right state.
 
 	s.Close()
 	s.cmd.Process.Kill()
 	s.cmd.Wait()
-}
-
-func testExtensions(t *testing.T, s *Client) {
-	exp := map[string]extension{
-		"posix-rename@openssh.com": {
-			Name:    "posix-rename@openssh.com",
-			Data:    "1",
-			version: 1,
-		},
-		"statvfs@openssh.com": {
-			Name:    "statvfs@openssh.com",
-			Data:    "2",
-			version: 2,
-		},
-		"fstatvfs@openssh.com": {
-			Name:    "fstatvfs@openssh.com",
-			Data:    "2",
-			version: 2,
-		},
-		"hardlink@openssh.com": {
-			Name:    "hardlink@openssh.com",
-			Data:    "1",
-			version: 1,
-		},
-	}
-	if !reflect.DeepEqual(s.exts, exp) {
-		t.Errorf("Extentions got: %+v, want: %+v", s.exts, exp)
-	}
 }
 
 func testStat(t *testing.T, s *Client, file string) {
@@ -242,6 +216,27 @@ func testRename(t *testing.T, s *Client, path string) {
 	}
 	if err := s.Rename(newPath, path); err != nil {
 		t.Errorf("s.Rename(%q, %q) = %v, want nil", newPath, path, err)
+		return
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("os.Stat(%q) = _, %v, want nil", path, err)
+		return
+	}
+}
+
+func testPosixRename(t *testing.T, s *Client, path string) {
+	s.PosixRename("a", "b")
+	newPath := path + ".new"
+	if err := s.PosixRename(path, newPath); err != nil {
+		t.Errorf("s.PosixRename(%q, %q) = %v, want nil", path, newPath, err)
+		return
+	}
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("os.Stat(%q) = _, %v, want nil", newPath, err)
+		return
+	}
+	if err := s.PosixRename(newPath, path); err != nil {
+		t.Errorf("s.PosixRename(%q, %q) = %v, want nil", newPath, path, err)
 		return
 	}
 	if _, err := os.Stat(path); err != nil {

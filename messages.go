@@ -56,20 +56,11 @@ const (
 
 // ider specifies functions for a struct to contain an identifier.
 type ider interface {
-	// ID returns the identifier of the instance.
-	ID() uint32
+	// GetID returns the identifier of the instance.
+	GetID() uint32
 	// SetID sets the identifier of the instance.
 	SetID(uint32)
 }
-
-// ReqID is a request ID used in all requests. It has external visibility for
-// unmarshalling purposes.
-type ReqID uint32
-
-func (f ReqID) ID() uint32 {
-	return uint32(f)
-}
-func (f ReqID) SetID(id uint32) { f = ReqID(id) }
 
 // fxpInitMsg is the first message sent from client to server in the SFTP
 // protocol.
@@ -94,115 +85,171 @@ func stringList(buf []byte) []string {
 }
 
 type fxpOpenMsg struct {
-	ReqID    `sshtype:"3"`
+	ID       uint32 `sshtype:"3"`
 	Filename string
 	Pflags   uint32
 	AttrData []byte `ssh:"rest"`
 }
 
+func (f *fxpOpenMsg) GetID() uint32   { return f.ID }
+func (f *fxpOpenMsg) SetID(id uint32) { f.ID = id }
+
 type fxpCloseMsg struct {
-	ReqID  `sshtype:"4"`
+	ID     uint32 `sshtype:"4"`
 	Handle string
 }
 
+func (f *fxpCloseMsg) GetID() uint32   { return f.ID }
+func (f *fxpCloseMsg) SetID(id uint32) { f.ID = id }
+
 type fxpReadMsg struct {
-	ReqID  `sshtype:"5"`
+	ID     uint32 `sshtype:"5"`
 	Handle string
 	Offset uint64
 	Length uint32
 }
 
+func (f *fxpReadMsg) GetID() uint32   { return f.ID }
+func (f *fxpReadMsg) SetID(id uint32) { f.ID = id }
+
 type fxpWriteMsg struct {
-	ReqID  `sshtype:"6"`
+	ID     uint32 `sshtype:"6"`
 	Handle string
 	Offset uint64
 	Data   []byte
 }
 
+func (f *fxpWriteMsg) GetID() uint32   { return f.ID }
+func (f *fxpWriteMsg) SetID(id uint32) { f.ID = id }
+
 type fxpRemoveMsg struct {
-	ReqID    `sshtype:"13"`
+	ID       uint32 `sshtype:"13"`
 	Filename string
 }
 
+func (f *fxpRemoveMsg) GetID() uint32   { return f.ID }
+func (f *fxpRemoveMsg) SetID(id uint32) { f.ID = id }
+
 type fxpRenameMsg struct {
-	ReqID   `sshtype:"18"`
+	ID      uint32 `sshtype:"18"`
 	OldPath string
 	NewPath string
 }
 
+func (f *fxpRenameMsg) GetID() uint32   { return f.ID }
+func (f *fxpRenameMsg) SetID(id uint32) { f.ID = id }
+
 type fxpMkdirMsg struct {
-	ReqID    `sshtype:"14"`
+	ID       uint32 `sshtype:"14"`
 	Path     string
 	AttrData []byte `ssh:"rest"`
 }
+
+func (f *fxpMkdirMsg) GetID() uint32   { return f.ID }
+func (f *fxpMkdirMsg) SetID(id uint32) { f.ID = id }
 
 type fxpRmdirMsg struct {
-	ReqID `sshtype:"15"`
-	Path  string
+	ID   uint32 `sshtype:"15"`
+	Path string
 }
+
+func (f *fxpRmdirMsg) GetID() uint32   { return f.ID }
+func (f *fxpRmdirMsg) SetID(id uint32) { f.ID = id }
 
 type fxpOpenDirMsg struct {
-	ReqID `sshtype:"11"`
-	Path  string
+	ID   uint32 `sshtype:"11"`
+	Path string
 }
+
+func (f *fxpOpenDirMsg) GetID() uint32   { return f.ID }
+func (f *fxpOpenDirMsg) SetID(id uint32) { f.ID = id }
 
 type fxpReadDirMsg struct {
-	ReqID  `sshtype:"12"`
+	ID     uint32 `sshtype:"12"`
 	Handle string
 }
+
+func (f *fxpReadDirMsg) GetID() uint32   { return f.ID }
+func (f *fxpReadDirMsg) SetID(id uint32) { f.ID = id }
 
 type fxpStatMsg struct {
-	ReqID `sshtype:"17"`
-	Path  string
+	ID   uint32 `sshtype:"17"`
+	Path string
 }
+
+func (f *fxpStatMsg) GetID() uint32   { return f.ID }
+func (f *fxpStatMsg) SetID(id uint32) { f.ID = id }
 
 type fxpLStatMsg struct {
-	ReqID `sshtype:"7"`
-	Path  string
+	ID   uint32 `sshtype:"7"`
+	Path string
 }
 
+func (f *fxpLStatMsg) GetID() uint32   { return f.ID }
+func (f *fxpLStatMsg) SetID(id uint32) { f.ID = id }
+
 type fxpFStatMsg struct {
-	ReqID  `sshtype:"8"`
+	ID     uint32 `sshtype:"8"`
 	Handle string
 }
 
+func (f *fxpFStatMsg) GetID() uint32   { return f.ID }
+func (f *fxpFStatMsg) SetID(id uint32) { f.ID = id }
+
 type fxpSetStatMsg struct {
-	ReqID    `sshtype:"9"`
+	ID       uint32 `sshtype:"9"`
 	Path     string
 	AttrData []byte `ssh:"rest"`
 }
 
+func (f *fxpSetStatMsg) GetID() uint32   { return f.ID }
+func (f *fxpSetStatMsg) SetID(id uint32) { f.ID = id }
+
 type fxpFSetStatMsg struct {
-	ReqID    `sshtype:"10"`
+	ID       uint32 `sshtype:"10"`
 	Handle   string
 	AttrData []byte `ssh:"rest"`
 }
 
+func (f *fxpFSetStatMsg) GetID() uint32   { return f.ID }
+func (f *fxpFSetStatMsg) SetID(id uint32) { f.ID = id }
+
 type fxpReadLinkMsg struct {
-	ReqID `sshtype:"19"`
-	Path  string
+	ID   uint32 `sshtype:"19"`
+	Path string
 }
+
+func (f *fxpReadLinkMsg) GetID() uint32   { return f.ID }
+func (f *fxpReadLinkMsg) SetID(id uint32) { f.ID = id }
 
 type fxpRealPathMsg struct {
-	ReqID `sshtype:"16"`
-	Path  string
+	ID   uint32 `sshtype:"16"`
+	Path string
 }
 
+func (f *fxpRealPathMsg) GetID() uint32   { return f.ID }
+func (f *fxpRealPathMsg) SetID(id uint32) { f.ID = id }
+
 type fxpSymlinkMsg struct {
-	ReqID      `sshtype:"20"`
+	ID         uint32 `sshtype:"20"`
 	LinkPath   string
 	TargetPath string
 }
 
-// fxpExtendedMsg is the request type for vendor-specific extensions
-// implemented by the server.
-type fxpExtendedMsg struct {
-	ReqID `sshtype:"200"`
+func (f *fxpSymlinkMsg) GetID() uint32   { return f.ID }
+func (f *fxpSymlinkMsg) SetID(id uint32) { f.ID = id }
+
+type posixRenameMsg struct {
+	ID uint32 `sshtype:"200"`
 	// Extension is the extension name, in the form "name@domain".
 	Extension string
-	// Data is the payload for the extension, which may be empty.
-	Data []byte
+
+	OldPath string
+	NewPath string
 }
+
+func (f *posixRenameMsg) GetID() uint32   { return f.ID }
+func (f *posixRenameMsg) SetID(id uint32) { f.ID = id }
 
 // Status is a error number defined by section 7, "Responses from the Server to
 // the Client".
@@ -222,25 +269,34 @@ const (
 )
 
 type fxpStatusResp struct {
-	ReqID    `sshtype:"101"`
+	ID       uint32 `sshtype:"101"`
 	Status   Status
 	Msg      string
 	Language string
 }
+
+func (f *fxpStatusResp) GetID() uint32   { return f.ID }
+func (f *fxpStatusResp) SetID(id uint32) { f.ID = id }
 
 func (f fxpStatusResp) Error() string {
 	return fmt.Sprintf("sftp: %s", f.Msg)
 }
 
 type fxpHandleResp struct {
-	ReqID  `sshtype:"102"`
+	ID     uint32 `sshtype:"102"`
 	Handle string
 }
 
+func (f *fxpHandleResp) GetID() uint32   { return f.ID }
+func (f *fxpHandleResp) SetID(id uint32) { f.ID = id }
+
 type fxpDataResp struct {
-	ReqID `sshtype:"103"`
-	Data  []byte
+	ID   uint32 `sshtype:"103"`
+	Data []byte
 }
+
+func (f *fxpDataResp) GetID() uint32   { return f.ID }
+func (f *fxpDataResp) SetID(id uint32) { f.ID = id }
 
 type fxpNameData struct {
 	Filename string
@@ -250,10 +306,13 @@ type fxpNameData struct {
 }
 
 type fxpNameResp struct {
-	ReqID `sshtype:"104"`
+	ID    uint32 `sshtype:"104"`
 	Count uint32
 	Data  []byte `ssh:"rest"`
 }
+
+func (f *fxpNameResp) GetID() uint32   { return f.ID }
+func (f *fxpNameResp) SetID(id uint32) { f.ID = id }
 
 func (r *fxpNameResp) Attrs() ([]fxpNameData, error) {
 	if r.Count == 0 {
@@ -284,14 +343,20 @@ func (r *fxpNameResp) Attrs() ([]fxpNameData, error) {
 }
 
 type fxpAttrsResp struct {
-	ReqID    `sshtype:"105"`
+	ID       uint32 `sshtype:"105"`
 	AttrData []byte `ssh:"rest"`
 }
 
+func (f *fxpAttrsResp) GetID() uint32   { return f.ID }
+func (f *fxpAttrsResp) SetID(id uint32) { f.ID = id }
+
 type fxpExtendedResp struct {
-	ReqID `sshtype:"201"`
-	Data  []byte `ssh:"rest"`
+	ID   uint32 `sshtype:"201"`
+	Data []byte `ssh:"rest"`
 }
+
+func (f *fxpExtendedResp) GetID() uint32   { return f.ID }
+func (f *fxpExtendedResp) SetID(id uint32) { f.ID = id }
 
 // UnexpectedMessageError results when the SSH message that was received did
 // not match what the protocol specifies as the proper returned message type.
