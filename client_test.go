@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"syscall"
 	"testing"
 )
@@ -39,13 +40,14 @@ func newTestSFTP(t *testing.T) *testSFTP {
 		t.Fatalf("sftp.cmd.Start() = %v, want nil", err)
 	}
 	if err := sftp.init(); err != nil {
-		t.Fatal("sftp.init() = %v, want nil", err)
+		t.Fatalf("sftp.init() = %v, want nil", err)
 	}
 	return &sftp
 }
 
 func TestAll(t *testing.T) {
 	s := newTestSFTP(t)
+	testExtensions(t, s.Client)
 
 	tmpDir, err := ioutil.TempDir("", "sftptest")
 	if err != nil {
@@ -67,6 +69,34 @@ func TestAll(t *testing.T) {
 	s.Close()
 	s.cmd.Process.Kill()
 	s.cmd.Wait()
+}
+
+func testExtensions(t *testing.T, s *Client) {
+	exp := map[string]extension{
+		"posix-rename@openssh.com": {
+			Name:    "posix-rename@openssh.com",
+			Data:    "1",
+			version: 1,
+		},
+		"statvfs@openssh.com": {
+			Name:    "statvfs@openssh.com",
+			Data:    "2",
+			version: 2,
+		},
+		"fstatvfs@openssh.com": {
+			Name:    "fstatvfs@openssh.com",
+			Data:    "2",
+			version: 2,
+		},
+		"hardlink@openssh.com": {
+			Name:    "hardlink@openssh.com",
+			Data:    "1",
+			version: 1,
+		},
+	}
+	if !reflect.DeepEqual(s.exts, exp) {
+		t.Errorf("Extentions got: %+v, want: %+v", s.exts, exp)
+	}
 }
 
 func testStat(t *testing.T, s *Client, file string) {

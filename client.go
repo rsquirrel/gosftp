@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 
 	"code.google.com/p/gosshnew/ssh"
@@ -107,6 +108,13 @@ func (l *fxpChanList) closeAll() {
 	}
 }
 
+type extension struct {
+	Name    string
+	Data    string
+	version int
+	Rest    []byte `ssh:"rest"`
+}
+
 // Client provides an SFTP client instance.
 type Client struct {
 	stdin   io.WriteCloser
@@ -114,6 +122,7 @@ type Client struct {
 	stderr  io.Reader
 	chans   *fxpChanList
 	session *ssh.Session
+	exts    map[string]extension
 }
 
 // NewClient creates a new SFTP client on top of an already created
@@ -173,6 +182,27 @@ func (s *Client) init() error {
 		}
 	default:
 		return errors.New("invalid packet received during initialization")
+	}
+	vers := resp.(*fxpVersionMsg)
+	s.exts = make(map[string]extension)
+	if len(vers.Ext) > 0 {
+		exts := vers.Ext
+		for len(exts) > 0 {
+			e := extension{}
+			if err := ssh.Unmarshal(exts, &e); err != nil {
+				return err
+			}
+			if len(exts) < 2 {
+				break
+			}
+			exts = e.Rest
+			e.Rest = nil
+
+			if n, err := strconv.Atoi(e.Data); err == nil {
+				e.version = n
+			}
+			s.exts[e.Name] = e
+		}
 	}
 	go s.mainLoop()
 
@@ -543,6 +573,9 @@ func (s *Client) Symlink(oldname, newname string) error {
 	// "inadvertently" implemented this request incorrectly and decided to
 	// just go with it. See the PROTOCOL file in OpenSSH for more
 	// information.
+	// TODO(ekg): make this optional so as to support non-OpenSSH SFTP
+	// implementations, if necessary. It may be that other implementations
+	// do the same.
 	return s.expectStatus(fxpSymlinkMsg{LinkPath: oldname, TargetPath: newname})
 }
 

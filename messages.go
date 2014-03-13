@@ -84,9 +84,8 @@ type fxpVersionMsg struct {
 	// Version contains the lowest of the server's and client's implemented
 	// version.
 	Version uint32 `sshtype:"2"`
-	// Data may contain a list of strings representing optional extensions.
-	// No extensions are presently supported.
-	Data []byte `ssh:"rest"`
+	// Ext may contain a list of strings representing optional extensions.
+	Ext []byte `ssh:"rest"`
 }
 
 // stringList parses a series of string fields from a byte buffer.
