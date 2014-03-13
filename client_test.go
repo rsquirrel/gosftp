@@ -7,6 +7,7 @@
 package sftp
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -59,7 +60,7 @@ func TestAll(t *testing.T) {
 	testStat(t, s.Client, file)
 	testChown(t, s.Client, file)
 	testRename(t, s.Client, file)
-	testReadDir(t, s.Client, dir)
+	testReaddir(t, s.Client, dir)
 	testSymlink(t, s.Client, file)
 	testRemove(t, s.Client, file)
 	testRmdir(t, s.Client, dir)
@@ -256,13 +257,28 @@ func testRmdir(t *testing.T, s *Client, path string) {
 	}
 }
 
-func testReadDir(t *testing.T, s *Client, path string) {
-	_, err := s.readDir(path)
+func testReaddir(t *testing.T, s *Client, path string) {
+	names, err := s.ReadDir(path)
 	if err != nil {
 		t.Errorf("s.ReadDir(%q) = _, %v, want nil", path, err)
 	}
-	// TODO(ekg): implement a test on the return value when the
-	// implementation is complete.
+	found := map[string]bool{
+		".":      false,
+		"..":     false,
+		"upload": false,
+	}
+	for _, n := range names {
+		if _, ok := found[n.Name()]; ok {
+			found[n.Name()] = true
+			continue
+		}
+		t.Errorf("s.ReadDir(%q) returned unexpected name %q", path, n.Name())
+	}
+	for k, v := range found {
+		if !v {
+			t.Errorf("s.ReadDir(%q) did not return expected name %q", path, k)
+		}
+	}
 }
 
 func testSymlink(t *testing.T, s *Client, path string) {

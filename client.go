@@ -179,7 +179,7 @@ func (s *Client) init() error {
 	return nil
 }
 
-// writePacket writes a packet repreesnted by a slice of bytes to the server,
+// writePacket writes a packet represented by a slice of bytes to the server,
 // in the format specified by the protocol.
 func (s *Client) writePacket(packet []byte) error {
 	length := len(packet)
@@ -249,7 +249,7 @@ func (s *Client) Close() {
 	s.stdin.Close()
 }
 
-// decodeClient decodes a responsee packet's raw data into its corresponding
+// decodeClient decodes a response packet's raw data into its corresponding
 // message structure.
 func decodeClient(packet []byte) (interface{}, error) {
 	var msg interface{}
@@ -305,7 +305,14 @@ func (s *Client) expectAttr(req ider) (*FileAttributes, error) {
 	case *fxpStatusResp:
 		return nil, msg
 	case *fxpAttrsResp:
-		return NewFileAttributes(msg.AttrData), nil
+		a, out, err := newFileAttributes(msg.AttrData)
+		if err != nil {
+			return nil, err
+		}
+		if len(out) != 0 {
+			return nil, fmt.Errorf("Expected 0 bytes remaining in fileattr, got %d", len(out))
+		}
+		return a, nil
 	default:
 		panic("unexpected message type returned from server")
 	}
@@ -362,9 +369,13 @@ func (s *Client) expectName(req ider) ([]fxpNameData, error) {
 	resp := fxpCh.waitForResponse()
 	switch msg := resp.(type) {
 	case *fxpStatusResp:
+		if msg.Status == eof {
+			return nil, io.EOF
+		}
+
 		return nil, msg
 	case *fxpNameResp:
-		return msg.Data, nil
+		return msg.Attrs()
 	default:
 		panic("unexpected message type returned from server")
 	}
@@ -427,17 +438,11 @@ func (s *Client) Rmdir(name string) error {
 
 // ReadDir returns a list of file information for files in a specific
 // directory.
-func (s *Client) readDir(name string) ([]os.FileInfo, error) {
+func (s *Client) ReadDir(name string) ([]os.FileInfo, error) {
 	h, err := s.expectHandle(fxpOpenDirMsg{Path: name})
 	if err != nil {
 		return nil, err
 	}
-	// close the handle regardless of whether an error is encountered.
-	defer s.expectStatus(fxpCloseMsg{Handle: h})
-
-	// TODO(ekg): the unmarshaling doesn't support slices of structs. Fix
-	// this and change the visibility of this method.
-	return nil, nil
 
 	fi := []os.FileInfo{}
 	for {
@@ -448,9 +453,9 @@ func (s *Client) readDir(name string) ([]os.FileInfo, error) {
 			}
 			return nil, err
 		}
-		for _, data := range names {
-			a := NewFileAttributes(data.AttrData)
-			a.name = data.Filename
+		for i := range names {
+			a := names[i].attr
+			a.name = names[i].Filename
 			fi = append(fi, a)
 		}
 	}
@@ -679,7 +684,6 @@ func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	return int64(f.offset), nil
 }
 
-// TODO(ekg): handle other methods
 func (f *File) Chown(uid, gid int) error {
 	a := FileAttributes{}
 	a.setID(uint32(uid), uint32(gid))
@@ -687,6 +691,11 @@ func (f *File) Chown(uid, gid int) error {
 	return f.sftp.expectStatus(req)
 }
 
+func (f *File) Name() string {
+	return f.name
+}
+
+/*
 func (c *Client) Put(local, remote string) error {
 	// TODO(ekg): fillout this function.
 	return nil
@@ -696,3 +705,4 @@ func (c *Client) Get(remote, local string) error {
 	// TODO(ekg): fillout this function.
 	return nil
 }
+*/

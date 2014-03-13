@@ -8,6 +8,8 @@ package sftp
 
 import (
 	"fmt"
+
+	"code.google.com/p/gosshnew/ssh"
 )
 
 // SSH file transer protocol request packet types, defined in section 3,
@@ -242,15 +244,44 @@ type fxpDataResp struct {
 }
 
 type fxpNameData struct {
-	ReqID
 	Filename string
 	Longname string
-	AttrData []byte `ssh:"rest"`
+	Data     []byte `ssh:"rest"`
+	attr     *FileAttributes
 }
 
 type fxpNameResp struct {
 	ReqID `sshtype:"104"`
-	Data  []fxpNameData
+	Count uint32
+	Data  []byte `ssh:"rest"`
+}
+
+func (r *fxpNameResp) Attrs() ([]fxpNameData, error) {
+	if r.Count == 0 {
+		return nil, nil
+	}
+	data := r.Data
+	r.Data = nil
+	names := make([]fxpNameData, 0, r.Count)
+	for len(data) > 0 {
+		name := fxpNameData{}
+		if err := ssh.Unmarshal(data, &name); err != nil {
+			return nil, err
+		}
+		data = name.Data
+		name.Data = nil
+		var err error
+		name.attr, data, err = newFileAttributes(data)
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	if len(data) != 0 {
+		return nil, fmt.Errorf("Expected to have 0 bytes of data left, have %d", len(data))
+	}
+
+	return names, nil
 }
 
 type fxpAttrsResp struct {
