@@ -225,7 +225,6 @@ func testRename(t *testing.T, s *Client, path string) {
 }
 
 func testPosixRename(t *testing.T, s *Client, path string) {
-	s.PosixRename("a", "b")
 	newPath := path + ".new"
 	if err := s.PosixRename(path, newPath); err != nil {
 		t.Errorf("s.PosixRename(%q, %q) = %v, want nil", path, newPath, err)

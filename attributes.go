@@ -30,17 +30,12 @@ const (
 type FileAttributes struct {
 	name  string
 	flags uint32
-
-	size uint64 // 0-7
-
-	uid uint32 // 8-11
-	gid uint32 // 12-15
-
-	permission uint32 // 16-19
-
-	aTime uint32 // 20-23
-	mTime uint32 // 24-27
-
+	size uint64
+	uid uint32
+	gid uint32
+	permission uint32
+	aTime uint32
+	mTime uint32
 	ext []extInfo
 }
 
