@@ -573,6 +573,13 @@ func (s *Client) Chown(path string, uid, gid int) error {
 	a.setID(uint32(uid), uint32(gid))
 	return s.expectStatus(&fxpSetStatMsg{Path: path, AttrData: a.bytes()})
 }
+
+func (s *Client) Chmod(path string, mode os.FileMode) error {
+	a := FileAttributes{}
+	a.setPermission(uint32(mode&os.ModePerm))
+	return s.expectStatus(&fxpSetStatMsg{Path: path, AttrData: a.bytes()})
+}
+
 func (s *Client) Readlink(name string) (string, error) {
 	return s.expectOneName(&fxpReadLinkMsg{Path: name})
 }

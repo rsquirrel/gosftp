@@ -67,6 +67,7 @@ func TestAll(t *testing.T) {
 	testSymlink(t, s.Client, file)
 	testRemove(t, s.Client, file)
 	testPut(t, s.Client, file)
+	testChmod(t, s.Client, file)
 	testRemove(t, s.Client, file)
 	testRmdir(t, s.Client, dir)
 	// TODO(ekg): test that the chanList is in the right state.
@@ -347,5 +348,21 @@ func testPut(t *testing.T, s *Client, file string) {
 	}
 	if string(b) != string(b2) {
 		t.Errorf("Put wrote %q but subsequent read returned %q", b, b2)
+	}
+}
+
+func testChmod(t *testing.T, s *Client, file string) {
+	m := os.FileMode(0757)
+	if err := s.Chmod(file, m); err != nil {
+		t.Errorf("Chown(%q, %v) = %v, want nil", file, m, err)
+		return
+	}
+	fi, err := os.Stat(file)
+	if err != nil {
+		t.Errorf("os.Stat(%q) = _, %v want nil", file, err)
+		return
+	}
+	if fi.Mode()&os.ModePerm != m {
+		t.Errorf("fi.Mode() = %o, want %o", fi.Mode()&os.ModePerm, m)
 	}
 }
