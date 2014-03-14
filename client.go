@@ -111,11 +111,13 @@ func (l *fxpChanList) closeAll() {
 // Extensions supported by the OpenSSH sftp implementation.
 const (
 	posixRename = "posix-rename@openssh.com"
-	statVFS     = "statvfs@openssh.com"
-	fStatVFS    = "fstatvfs@openssh.com"
-	hardlink    = "hardlink@openssh.com"
+	// TODO(ekg): implement the below extensions.
+	statVFS  = "statvfs@openssh.com"
+	fStatVFS = "fstatvfs@openssh.com"
+	hardlink = "hardlink@openssh.com"
 )
 
+// extension represents an extension suppported by the server.
 type extension struct {
 	Name    string
 	Data    string
@@ -206,6 +208,10 @@ func (s *Client) init() error {
 			exts = e.Rest
 			e.Rest = nil
 
+			// OpenSSH's sftp-server implementation specifies that
+			// the data portion of an extension is an ASCII-encoded
+			// version number. This is not part of the SFTP
+			// specification, however.
 			if n, err := strconv.Atoi(e.Data); err == nil {
 				e.version = n
 			}
@@ -412,7 +418,7 @@ func (s *Client) expectName(req ider) ([]fxpNameData, error) {
 
 		return nil, msg
 	case *fxpNameResp:
-		return msg.Attrs()
+		return msg.Names()
 	default:
 		panic("unexpected message type returned from server")
 	}
@@ -751,13 +757,25 @@ func (f *File) Name() string {
 	return f.name
 }
 
-/*
-func (c *Client) Put(local, remote string) error {
-	// TODO(ekg): fillout this function.
-	return nil
+// Put is a convenience method that copies data to the remote path, creating
+// the file with default permissions if it does not exist and overwriting it if
+// it does.
+func (c *Client) Put(r io.Reader, remote string) (n int64, _ error) {
+	f, err := c.OpenFile(remote, os.O_WRONLY|os.O_CREATE, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	n, err = io.Copy(f, r)
+	if err != nil {
+		return n, err
+	}
+	return n, nil
 }
 
-func (c *Client) Get(remote, local string) error {
+/*
+func (c *Client) Get(remote, local string) ([]byte, error) {
 	// TODO(ekg): fillout this function.
 	return nil
 }

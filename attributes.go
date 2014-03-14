@@ -28,15 +28,15 @@ const (
 // only conditionally include fields if the server supports them. See the
 // function documentation for how this is handled.
 type FileAttributes struct {
-	name  string
-	flags uint32
-	size uint64
-	uid uint32
-	gid uint32
+	name       string
+	flags      uint32
+	size       uint64
+	uid        uint32
+	gid        uint32
 	permission uint32
-	aTime uint32
-	mTime uint32
-	ext []extInfo
+	aTime      uint32
+	mTime      uint32
+	ext        []extInfo
 }
 
 type extInfo struct {

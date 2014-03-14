@@ -7,6 +7,7 @@
 package sftp
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -64,6 +65,8 @@ func TestAll(t *testing.T) {
 	testPosixRename(t, s.Client, file)
 	testReaddir(t, s.Client, dir)
 	testSymlink(t, s.Client, file)
+	testRemove(t, s.Client, file)
+	testPut(t, s.Client, file)
 	testRemove(t, s.Client, file)
 	testRmdir(t, s.Client, dir)
 	// TODO(ekg): test that the chanList is in the right state.
@@ -323,5 +326,26 @@ func testSymlink(t *testing.T, s *Client, path string) {
 	}
 	if err := s.Remove(linkPath); err != nil {
 		t.Errorf("s.Remove(%q) = %v want nil", linkPath)
+	}
+}
+
+func testPut(t *testing.T, s *Client, file string) {
+	b := []byte("test pattern")
+	if n, err := s.Put(bytes.NewReader(b), file); err != nil || int(n) != len(b) {
+		t.Errorf("Put(%q, %q) = %v, %v, want %d, nil", b, file, n, err)
+	}
+	f, err := s.OpenFile(file, int(os.O_RDONLY), 0)
+	if err != nil {
+		t.Errorf("Open(%q, RDONLY, nil) = _, %v, want non-nil", file, err)
+		return
+	}
+	defer f.Close()
+	b2, err := ioutil.ReadAll(f)
+	if err != nil {
+		t.Errorf("ReadAll(%v) = _, %v, want nil", f, b)
+		return
+	}
+	if string(b) != string(b2) {
+		t.Errorf("Put wrote %q but subsequent read returned %q", b, b2)
 	}
 }

@@ -90,6 +90,7 @@ type fxpOpenMsg struct {
 	Pflags   uint32
 	AttrData []byte `ssh:"rest"`
 }
+
 func (f *fxpOpenMsg) GetID() uint32   { return f.ID }
 func (f *fxpOpenMsg) SetID(id uint32) { f.ID = id }
 
@@ -97,6 +98,7 @@ type fxpCloseMsg struct {
 	ID     uint32 `sshtype:"4"`
 	Handle string
 }
+
 func (f *fxpCloseMsg) GetID() uint32   { return f.ID }
 func (f *fxpCloseMsg) SetID(id uint32) { f.ID = id }
 
@@ -106,6 +108,7 @@ type fxpReadMsg struct {
 	Offset uint64
 	Length uint32
 }
+
 func (f *fxpReadMsg) GetID() uint32   { return f.ID }
 func (f *fxpReadMsg) SetID(id uint32) { f.ID = id }
 
@@ -115,6 +118,7 @@ type fxpWriteMsg struct {
 	Offset uint64
 	Data   []byte
 }
+
 func (f *fxpWriteMsg) GetID() uint32   { return f.ID }
 func (f *fxpWriteMsg) SetID(id uint32) { f.ID = id }
 
@@ -122,6 +126,7 @@ type fxpRemoveMsg struct {
 	ID       uint32 `sshtype:"13"`
 	Filename string
 }
+
 func (f *fxpRemoveMsg) GetID() uint32   { return f.ID }
 func (f *fxpRemoveMsg) SetID(id uint32) { f.ID = id }
 
@@ -130,6 +135,7 @@ type fxpRenameMsg struct {
 	OldPath string
 	NewPath string
 }
+
 func (f *fxpRenameMsg) GetID() uint32   { return f.ID }
 func (f *fxpRenameMsg) SetID(id uint32) { f.ID = id }
 
@@ -138,6 +144,7 @@ type fxpMkdirMsg struct {
 	Path     string
 	AttrData []byte `ssh:"rest"`
 }
+
 func (f *fxpMkdirMsg) GetID() uint32   { return f.ID }
 func (f *fxpMkdirMsg) SetID(id uint32) { f.ID = id }
 
@@ -145,6 +152,7 @@ type fxpRmdirMsg struct {
 	ID   uint32 `sshtype:"15"`
 	Path string
 }
+
 func (f *fxpRmdirMsg) GetID() uint32   { return f.ID }
 func (f *fxpRmdirMsg) SetID(id uint32) { f.ID = id }
 
@@ -152,6 +160,7 @@ type fxpOpenDirMsg struct {
 	ID   uint32 `sshtype:"11"`
 	Path string
 }
+
 func (f *fxpOpenDirMsg) GetID() uint32   { return f.ID }
 func (f *fxpOpenDirMsg) SetID(id uint32) { f.ID = id }
 
@@ -159,6 +168,7 @@ type fxpReadDirMsg struct {
 	ID     uint32 `sshtype:"12"`
 	Handle string
 }
+
 func (f *fxpReadDirMsg) GetID() uint32   { return f.ID }
 func (f *fxpReadDirMsg) SetID(id uint32) { f.ID = id }
 
@@ -166,6 +176,7 @@ type fxpStatMsg struct {
 	ID   uint32 `sshtype:"17"`
 	Path string
 }
+
 func (f *fxpStatMsg) GetID() uint32   { return f.ID }
 func (f *fxpStatMsg) SetID(id uint32) { f.ID = id }
 
@@ -173,6 +184,7 @@ type fxpLStatMsg struct {
 	ID   uint32 `sshtype:"7"`
 	Path string
 }
+
 func (f *fxpLStatMsg) GetID() uint32   { return f.ID }
 func (f *fxpLStatMsg) SetID(id uint32) { f.ID = id }
 
@@ -180,6 +192,7 @@ type fxpFStatMsg struct {
 	ID     uint32 `sshtype:"8"`
 	Handle string
 }
+
 func (f *fxpFStatMsg) GetID() uint32   { return f.ID }
 func (f *fxpFStatMsg) SetID(id uint32) { f.ID = id }
 
@@ -188,6 +201,7 @@ type fxpSetStatMsg struct {
 	Path     string
 	AttrData []byte `ssh:"rest"`
 }
+
 func (f *fxpSetStatMsg) GetID() uint32   { return f.ID }
 func (f *fxpSetStatMsg) SetID(id uint32) { f.ID = id }
 
@@ -196,6 +210,7 @@ type fxpFSetStatMsg struct {
 	Handle   string
 	AttrData []byte `ssh:"rest"`
 }
+
 func (f *fxpFSetStatMsg) GetID() uint32   { return f.ID }
 func (f *fxpFSetStatMsg) SetID(id uint32) { f.ID = id }
 
@@ -203,6 +218,7 @@ type fxpReadLinkMsg struct {
 	ID   uint32 `sshtype:"19"`
 	Path string
 }
+
 func (f *fxpReadLinkMsg) GetID() uint32   { return f.ID }
 func (f *fxpReadLinkMsg) SetID(id uint32) { f.ID = id }
 
@@ -210,6 +226,7 @@ type fxpRealPathMsg struct {
 	ID   uint32 `sshtype:"16"`
 	Path string
 }
+
 func (f *fxpRealPathMsg) GetID() uint32   { return f.ID }
 func (f *fxpRealPathMsg) SetID(id uint32) { f.ID = id }
 
@@ -218,15 +235,17 @@ type fxpSymlinkMsg struct {
 	LinkPath   string
 	TargetPath string
 }
+
 func (f *fxpSymlinkMsg) GetID() uint32   { return f.ID }
 func (f *fxpSymlinkMsg) SetID(id uint32) { f.ID = id }
 
 type posixRenameMsg struct {
-	ID uint32 `sshtype:"200"`
+	ID        uint32 `sshtype:"200"`
 	Extension string
-	OldPath string
-	NewPath string
+	OldPath   string
+	NewPath   string
 }
+
 func (f *posixRenameMsg) GetID() uint32   { return f.ID }
 func (f *posixRenameMsg) SetID(id uint32) { f.ID = id }
 
@@ -293,7 +312,10 @@ type fxpNameResp struct {
 func (f *fxpNameResp) GetID() uint32   { return f.ID }
 func (f *fxpNameResp) SetID(id uint32) { f.ID = id }
 
-func (r *fxpNameResp) Attrs() ([]fxpNameData, error) {
+// Names extracts the repeated name data from the Data buffer. This message
+// structure is not supported by Unmarshal, so we take advantage of the "rest"
+// field.
+func (r *fxpNameResp) Names() ([]fxpNameData, error) {
 	if r.Count == 0 {
 		return nil, nil
 	}
