@@ -127,7 +127,9 @@ type extension struct {
 
 // Client provides an SFTP client instance.
 type Client struct {
+	mu sync.Mutex
 	stdin   io.WriteCloser
+
 	stdout  io.Reader
 	stderr  io.Reader
 	chans   *fxpChanList
@@ -233,6 +235,8 @@ func (s *Client) writePacket(packet []byte) error {
 		byte(length >> 8),
 		byte(length),
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if _, err := s.stdin.Write(lengthBytes); err != nil {
 		return err
 	}
