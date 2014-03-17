@@ -117,18 +117,24 @@ const (
 	hardlink = "hardlink@openssh.com"
 )
 
+// extensionWire is used to unmarshal the extension data from the server.
+type extensionWire struct {
+	Name string
+	Data string
+	Rest []byte `ssh:"rest"`
+}
+
 // extension represents an extension suppported by the server.
 type extension struct {
 	Name    string
 	Data    string
 	version int
-	Rest    []byte `ssh:"rest"`
 }
 
 // Client provides an SFTP client instance.
 type Client struct {
-	mu sync.Mutex
-	stdin   io.WriteCloser
+	mu    sync.Mutex
+	stdin io.WriteCloser
 
 	stdout  io.Reader
 	stderr  io.Reader
@@ -200,21 +206,24 @@ func (s *Client) init() error {
 	if len(vers.Ext) > 0 {
 		exts := vers.Ext
 		for len(exts) > 0 {
-			e := extension{}
-			if err := ssh.Unmarshal(exts, &e); err != nil {
+			ew := extensionWire{}
+			if err := ssh.Unmarshal(exts, &ew); err != nil {
 				return err
 			}
 			if len(exts) < 2 {
 				break
 			}
-			exts = e.Rest
-			e.Rest = nil
+			exts = ew.Rest
 
+			e := extension{
+				Name: ew.Name,
+				Data: ew.Data,
+			}
 			// OpenSSH's sftp-server implementation specifies that
 			// the data portion of an extension is an ASCII-encoded
 			// version number. This is not part of the SFTP
 			// specification, however.
-			if n, err := strconv.Atoi(e.Data); err == nil {
+			if n, err := strconv.Atoi(ew.Data); err == nil {
 				e.version = n
 			}
 			s.exts[e.Name] = e
@@ -407,7 +416,7 @@ func (s *Client) expectHandle(req ider) (string, error) {
 
 // expectName sends the request and returns the file name data that is expected
 // to be returned.
-func (s *Client) expectName(req ider) ([]fxpNameData, error) {
+func (s *Client) expectName(req ider) ([]nameData, error) {
 	fxpCh, err := s.sendRequest(req)
 	if err != nil {
 		return nil, err
@@ -422,7 +431,7 @@ func (s *Client) expectName(req ider) ([]fxpNameData, error) {
 
 		return nil, msg
 	case *fxpNameResp:
-		return msg.Names()
+		return msg.names()
 	default:
 		panic("unexpected message type returned from server")
 	}
@@ -441,7 +450,7 @@ func (s *Client) expectOneName(msg ider) (string, error) {
 	if len(n) > 1 {
 		return "", fmt.Errorf("more than one name returned")
 	}
-	return n[0].Filename, nil
+	return n[0].filename, nil
 }
 
 // Stat returns file attributes for the given path.
@@ -502,7 +511,7 @@ func (s *Client) ReadDir(name string) ([]os.FileInfo, error) {
 		}
 		for i := range names {
 			a := names[i].attr
-			a.name = names[i].Filename
+			a.name = names[i].filename
 			fi = append(fi, a)
 		}
 	}
@@ -580,7 +589,7 @@ func (s *Client) Chown(path string, uid, gid int) error {
 
 func (s *Client) Chmod(path string, mode os.FileMode) error {
 	a := FileAttributes{}
-	a.setPermission(uint32(mode&os.ModePerm))
+	a.setPermission(uint32(mode & os.ModePerm))
 	return s.expectStatus(&fxpSetStatMsg{Path: path, AttrData: a.bytes()})
 }
 

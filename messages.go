@@ -300,7 +300,6 @@ type fxpNameData struct {
 	Filename string
 	Longname string
 	Data     []byte `ssh:"rest"`
-	attr     *FileAttributes
 }
 
 type fxpNameResp struct {
@@ -312,29 +311,39 @@ type fxpNameResp struct {
 func (f *fxpNameResp) GetID() uint32   { return f.ID }
 func (f *fxpNameResp) SetID(id uint32) { f.ID = id }
 
+type nameData struct {
+	filename string
+	longname string
+	attr     *FileAttributes
+}
+
 // Names extracts the repeated name data from the Data buffer. This message
 // structure is not supported by Unmarshal, so we take advantage of the "rest"
 // field.
-func (r *fxpNameResp) Names() ([]fxpNameData, error) {
+func (r *fxpNameResp) names() ([]nameData, error) {
 	if r.Count == 0 {
 		return nil, nil
 	}
 	data := r.Data
 	r.Data = nil
-	names := make([]fxpNameData, 0, r.Count)
+	names := make([]nameData, 0, r.Count)
 	for len(data) > 0 {
 		name := fxpNameData{}
 		if err := ssh.Unmarshal(data, &name); err != nil {
 			return nil, err
 		}
 		data = name.Data
-		name.Data = nil
+		var attr *FileAttributes
 		var err error
-		name.attr, data, err = newFileAttributes(data)
+		attr, data, err = newFileAttributes(data)
 		if err != nil {
 			return nil, err
 		}
-		names = append(names, name)
+		names = append(names, nameData{
+			filename: name.Filename,
+			longname: name.Longname,
+			attr:     attr,
+		})
 	}
 	if len(data) != 0 {
 		return nil, fmt.Errorf("Expected to have 0 bytes of data left, have %d", len(data))
