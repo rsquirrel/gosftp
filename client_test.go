@@ -297,6 +297,10 @@ func testReaddir(t *testing.T, s *Client, path string) {
 	for _, n := range names {
 		if _, ok := found[n.Name()]; ok {
 			found[n.Name()] = true
+
+		if n.Name() == "." && !n.IsDir() {
+		  t.Errorf("ReadDir(%q) claims '.' is not a directory, mode %v", path, n.Mode())
+		}
 			continue
 		}
 		t.Errorf("s.ReadDir(%q) returned unexpected name %q", path, n.Name())

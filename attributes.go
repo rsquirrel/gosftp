@@ -9,6 +9,7 @@ package sftp
 import (
 	"encoding/binary"
 	"os"
+	"syscall"
 	"time"
 
 	"code.google.com/p/gosshnew/ssh"
@@ -87,6 +88,34 @@ func newFileAttributes(data []byte) (_ *FileAttributes, out []byte, err error) {
 	return f, data, nil
 }
 
+func newFileMode(m uint32) (f os.FileMode) {
+	f = os.FileMode(m & 0777)
+	switch m & syscall.S_IFMT {
+	case syscall.S_IFBLK:
+		f |= os.ModeDevice
+	case syscall.S_IFCHR:
+		f |= os.ModeCharDevice|os.ModeDevice
+	case syscall.S_IFDIR:
+		f |= os.ModeDir
+	case syscall.S_IFIFO:
+		f |= os.ModeNamedPipe
+	case syscall.S_IFLNK:
+		f |= os.ModeSymlink
+	case syscall.S_IFSOCK:
+		f |= os.ModeSocket
+	}
+	if m&syscall.S_ISGID != 0 {
+		f |= os.ModeSetgid
+	}
+	if m&syscall.S_ISUID != 0 {
+		f |= os.ModeSetuid
+	}
+	if m&syscall.S_ISVTX != 0 {
+		f |= os.ModeSticky
+	}
+	return f
+}
+
 // Name returns the name of the file to which the data applies.
 func (f FileAttributes) Name() string {
 	return f.name
@@ -148,7 +177,7 @@ func (f FileAttributes) Mode() os.FileMode {
 	if f.flags&fxpAttrPermissions == 0 {
 		return 0
 	}
-	return os.FileMode(f.permission)
+	return newFileMode(f.permission)
 }
 
 // ModTime returns the modification time of the file. If the time was not
