@@ -255,7 +255,7 @@ type Status uint32
 
 // The list of error codes defined by the protocol.
 const (
-	ok Status = iota
+	OK Status = iota
 	eof
 	NoSuchFile
 	PermissionDenied
@@ -376,4 +376,14 @@ type UnexpectedMessageError struct {
 
 func (u UnexpectedMessageError) Error() string {
 	return fmt.Sprintf("ssh: unexpected message type %d (expected %d)", u.got, u.expected)
+}
+
+// GetStatus retrieves the sftp status code inside the sftp error. The second
+// returned value will be false if the given error is not an sftp error.
+func GetStatus(err error) (Status, bool) {
+	resp, ok := err.(*fxpStatusResp)
+	if !ok {
+		return 0, ok
+	}
+	return resp.Status, true
 }

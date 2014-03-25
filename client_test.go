@@ -61,6 +61,11 @@ func TestAll(t *testing.T) {
 	testWriteRead(t, s.Client, file)
 	testStat(t, s.Client, file)
 	testChown(t, s.Client, file)
+	// Remove the file and create a new one to test File.Chown
+	// The previous file may have lost the premission to change group.
+	testRemove(t, s.Client, file)
+	testWriteRead(t, s.Client, file)
+	testFileChown(t, s.Client, file)
 	testRename(t, s.Client, file)
 	testPosixRename(t, s.Client, file)
 	testReaddir(t, s.Client, dir)
@@ -182,19 +187,39 @@ func testChown(t *testing.T, s *Client, path string) {
 	if gid != uint32(newGID) {
 		t.Errorf("gid = %d, want %d", gid, newGID)
 	}
+}
+
+func testFileChown(t *testing.T, s *Client, path string) {
+	uid, oldGID, err := stat(path)
+	if err != nil {
+		t.Errorf("stat(%q) = _, %v want nil", path, err)
+		return
+	}
+
+	groups, err := os.Getgroups()
+	if err != nil {
+		t.Errorf("os.GetGroups() = _, %v, want nil", err)
+		return
+	}
+	var newGID int
+	if groups[0] != int(oldGID) {
+		newGID = groups[0]
+	} else {
+		newGID = groups[1]
+	}
 
 	f, err := s.Open(path)
 	if err != nil {
 		t.Errorf("Open(%q) = %v, want nil", path, err)
 	}
-	f.Chown(int(uid), int(oldGID))
+	f.Chown(int(uid), newGID)
 
-	_, gid, err = stat(path)
+	_, gid, err := stat(path)
 	if err != nil {
 		t.Errorf("stat(%q) = _, %v want nil", path, err)
 	}
-	if gid != uint32(oldGID) {
-		t.Errorf("gid = %d, want %d", gid, oldGID)
+	if gid != uint32(newGID) {
+		t.Errorf("gid = %d, want %d", gid, newGID)
 	}
 }
 
@@ -254,7 +279,7 @@ func testRemove(t *testing.T, s *Client, path string) {
 		return
 	}
 	if _, err := os.Stat(path); err == nil {
-		t.Errorf("os.Stat(%q) = _, nil, want non-nil")
+		t.Errorf("os.Stat(%q) = _, nil, want non-nil", path)
 	}
 }
 
@@ -280,7 +305,7 @@ func testRmdir(t *testing.T, s *Client, path string) {
 		return
 	}
 	if _, err := os.Stat(path); err == nil {
-		t.Errorf("os.Stat(%q) = _, nil, want non-nil")
+		t.Errorf("os.Stat(%q) = _, nil, want non-nil", path)
 	}
 }
 
@@ -330,14 +355,14 @@ func testSymlink(t *testing.T, s *Client, path string) {
 		t.Errorf("os.SameFile(%q, %q) = true, want false", linkPath, path)
 	}
 	if err := s.Remove(linkPath); err != nil {
-		t.Errorf("s.Remove(%q) = %v want nil", linkPath)
+		t.Errorf("s.Remove(%q) = %v want nil", linkPath, err)
 	}
 }
 
 func testPut(t *testing.T, s *Client, file string) {
 	b := []byte("test pattern")
 	if n, err := s.Put(bytes.NewReader(b), file); err != nil || int(n) != len(b) {
-		t.Errorf("Put(%q, %q) = %v, %v, want %d, nil", b, file, n, err)
+		t.Errorf("Put(%q, %q) = %v, %v, want %d, nil", b, file, n, err, len(b))
 	}
 	f, err := s.OpenFile(file, int(os.O_RDONLY), 0)
 	if err != nil {

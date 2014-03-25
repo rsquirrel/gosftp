@@ -385,7 +385,7 @@ func (s *Client) expectStatus(req ider) error {
 	resp := fxpCh.waitForResponse()
 	switch msg := resp.(type) {
 	case *fxpStatusResp:
-		if msg.Status != ok {
+		if msg.Status != OK {
 			return msg
 		}
 		return nil
@@ -735,7 +735,7 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 		resp := fxpCh.waitForResponse()
 		switch msg := resp.(type) {
 		case *fxpStatusResp:
-			if msg.Status != ok {
+			if msg.Status != OK {
 				err = msg
 				return
 			}
